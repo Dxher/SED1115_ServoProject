@@ -31,6 +31,7 @@ def translate(angle):
 	"""
 	Converts an angle in degrees to the corresponding input
 	for the duty_u16 method of the servo class
+	This function was provided from Lab7
 	"""
 	MIN = 1638 # 0 degrees
 	MAX = 8192 # 180 degrees
