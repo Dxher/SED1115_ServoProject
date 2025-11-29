@@ -163,7 +163,6 @@ def move_to(x, y):
     """
     Move the pen to position (x, y) in mm
     """
-<<<<<<< HEAD
         #logic that prevents it from gooing out of bound shere
 
 
@@ -178,11 +177,6 @@ def move_to(x, y):
     send_angle(servoA, servoB) # Send angles to servos
 
 
-=======
-    servoA, servoB = inverse_kinematics(x, y) # Calculate servo angles
-    
-    send_angle(servoA, servoB) # Send angles to servos
->>>>>>> 6c780fa9b135e1b4ec96415d4bfea19c20c7e266
     
     time.sleep_ms(50)
 
@@ -201,7 +195,6 @@ def main():
         #     time.sleep_ms(200)
         
         # prev_state = current_state
-<<<<<<< HEAD
         
         x,y = read_potentiometers()
 
@@ -226,14 +219,6 @@ def main():
    
         #Delay increased to ensure smooth motion. - Ev
         time.sleep_us(100)
-=======
-
-        x,y = read_potentiometers()
-
-        move_to(x, y)
-
-        time.sleep_us(50)
->>>>>>> 6c780fa9b135e1b4ec96415d4bfea19c20c7e266
 
 if __name__ == "__main__":    
     # Run comparison test for inputed jig_id
