@@ -195,5 +195,8 @@ def main():
             
         time.sleep_us(50)
 
-if __name__ == "__main__":    
-    main()
+if __name__ == "__main__":  
+    try:  
+        main()
+    except:
+        print("\nThe porgram has been forcefully stopped")
