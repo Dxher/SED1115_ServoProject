@@ -31,17 +31,14 @@ pot_x = ADC(Pin(26))  # X-axis potentiometer
 pot_y = ADC(Pin(27))  # Y-axis potentiometer
 
 # Button for pen toggle
-pen_button = Pin(16, Pin.IN, Pin.PULL_DOWN)
+pen_button = Pin(22, Pin.IN, Pin.PULL_DOWN)
 
 # Pen state
 pen_is_down = False
 pen_moving = False
 pen_move_start_time = 0
-PEN_UP_ANGLE = 90      # Angle when pen is lifted
-PEN_DOWN_ANGLE = 45    # Angle when pen is on paper
-PEN_MOVE_DURATION = 300  # ms to complete pen movement
-
-prev_state = 1
+pen_up_angle = 0      # Angle when pen is lifted
+pen_down_angle = 30    # Angle when pen is on paper
 
 def translate(angle):
     """
@@ -124,37 +121,6 @@ def read_potentiometers():
     
     return x, y
 
-def toggle_pen():
-    global pen_is_down, pen_moving, pen_move_start_time
-    """Toggle pen between up and down states"""
-    if pen_is_down or pen_moving:
-        set_servo_deg(pwm_pen, PEN_UP_ANGLE)
-        pen_is_down = False
-        pen_moving = True
-        pen_move_start_time = time.ticks_ms()
-        print("Pen UP")
-    else:
-        if not pen_is_down:
-            set_servo_deg(pwm_pen, PEN_DOWN_ANGLE)
-            pen_is_down = True
-            pen_moving = True
-            pen_move_start_time = time.ticks_ms()
-            print("Pen DOWN")
-
-def update_pen_state():
-    """
-    Update pen movement state - check if pen has finished moving
-    This prevents continuous servo strain once pen reaches target
-    """
-    global pen_moving
-    
-    if pen_moving:
-        elapsed = time.ticks_diff(time.ticks_ms(), pen_move_start_time)
-        if elapsed >= PEN_MOVE_DURATION:
-            pen_moving = False
-            # Optionally reduce servo power after movement completes
-            # This helps prevent servo strain when pen is against paper
-
 def send_angle(shoulder_angle, elbow_angle):    
     # Send to servos
     set_servo_deg(pwm_shoulder, shoulder_angle)
@@ -175,21 +141,38 @@ def move_to(x, y):
     
     time.sleep_ms(50)
 
+def toggle_pen():
+    global pen_is_down, pen_moving, pen_move_start_time
+    """Toggle pen between up and down states"""
+    if pen_is_down:
+        set_servo_deg(pwm_pen, pen_up_angle)
+        pen_is_down = False
+        pen_moving = True
+        pen_move_start_time = time.ticks_ms()
+        print("Pen UP")
+    else:
+        if not pen_is_down:
+            set_servo_deg(pwm_pen, pen_down_angle)
+            pen_is_down = True
+            pen_moving = True
+            pen_move_start_time = time.ticks_ms()
+            print("Pen DOWN")
+
 
 def main():
     """
     Compare drawing results with and without calibration
     """
+    prev_state = 1
     while True:
 
-        # current_state = pen_button.value()
-    
-        # if prev_state == 0 and current_state == 1:
-        #     update_pen_state()
-        #     toggle_pen()
-        #     time.sleep_ms(200)
+        current_state = pen_button.value()
+        if prev_state == 0 and current_state == 1:
+            toggle_pen()
+            
+            time.sleep_ms(200)
         
-        # prev_state = current_state
+        prev_state = current_state
         
         x,y = read_potentiometers()
 
@@ -213,6 +196,4 @@ def main():
         time.sleep_us(50)
 
 if __name__ == "__main__":    
-    # Run comparison test for inputed jig_id
-    move_to(90,90)
     main()
