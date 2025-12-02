@@ -1,34 +1,37 @@
-from machine import ADC
-import time
+# ------------------------------
+# moveServoGivenAngle Class
+# Handles servo angle conversion and movement timing
+# ------------------------------
 
-def main():
-    # create servo objects
-    shoulder = moveServoGivenAngle(currentAngle=90)
-    elbow = moveServoGivenAngle(currentAngle=90)
-    pen = moveServoGivenAngle(currentAngle=0)
+class moveServoGivenAngle:
+    def __init__(self, currentAngle=0):
+        # initial angle of the servo
+        self.currentAngle = currentAngle
+        self.secondsPerDegree = 0.002  # seconds / degree
 
-    # potentiometers
-    potX = ADC(26)  # pin 26 → shoulder
-    potY = ADC(27)  # pin 27 → elbow
+    # Convert angle to PWM cycle
+    def translate(self, angle):
+        # pulse width in microseconds for servo: 500–2500 µs range
+        pulse_us = 500 + (angle / 180.0) * 2000
+        return pulse_us
 
-    print("Running main…")
+    # Move the servo directly to the requested angle
+    def moveTo(self, targetAngle):
+        import time
 
-    while True:
-        # read raw ADC
-        x_val = potX.read_u16()
-        y_val = potY.read_u16()
+        # Keep angle in valid range
+        targetAngle = max(0, min(180, targetAngle))
 
-        # map to 0–180 degrees
-        shoulderAngle = int((x_val / 65535) * 180)
-        elbowAngle = int((y_val / 65535) * 180)
+        # Calculate pulse width
+        pulse = self.translate(targetAngle)
 
-        # move servos
-        shoulder.timeForAngle(shoulderAngle)
-        elbow.timeForAngle(elbowAngle)
+        # You will replace this print with actual PWM output
+        print(f"[Servo] Moving to {targetAngle} degrees (pulse = {pulse:.1f} µs)")
 
-        # pen servo unchanged until you add controls
+        # Movement timing
+        movementTime = abs(targetAngle - self.currentAngle) * self.secondsPerDegree
+        time.sleep(movementTime)
 
-        time.sleep(0.01)
-
-
-main()
+        # Update internal angle tracker
+        self.currentAngle = targetAngle
+        return targetAngle
