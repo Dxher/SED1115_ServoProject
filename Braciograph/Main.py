@@ -72,6 +72,7 @@ def inverse_kinematics(Cx, Cy):
     dy = Cy - ShoulderY
     Lac = math.sqrt(dx*dx + dy*dy)
 
+    #Two arms lengths added
     max_reach = Lab + Lbc
     if Lac == 0 or Lac > max_reach:
         raise ValueError("Point C is unreachable for this arm")
@@ -165,18 +166,12 @@ def move_to(x, y):
     """
         #logic that prevents it from gooing out of bound shere
 
-
-    print(x,y)
-
-
-
-    
+    # I was just using this to see x, y values during testing - Ev
+    #print(x,y)    
 
     servoA, servoB = inverse_kinematics(x, y) # Calculate servo angles
 
     send_angle(servoA, servoB) # Send angles to servos
-
-
     
     time.sleep_ms(50)
 
@@ -198,27 +193,24 @@ def main():
         
         x,y = read_potentiometers()
 
-        # I made it "correct" but it only works when it stops, so kinda worthless now
+        """
+        This code corrects the position of the pen by setting desired
+        coordinates within bounds, the issue is that when the
+        pen is moving, my overwrite is overwritten. It does, however
+        fix the position when the pen stops. - Ev
+        """
         if (x>0 or x<215) and (y>0 or y<279):
             move_to(x, y)
         if (x>215):
-                x = 215
-                
-                time.sleep_us(100)
-                
+            x = 215
         else:
-                x = 0
-                time.sleep_us(100)
+            x = 0
         if (y<0):
             y= 0
-            time.sleep_us(100)
         else:
             y=279
-            time.sleep_us(100)
             
-   
-        #Delay increased to ensure smooth motion. - Ev
-        time.sleep_us(100)
+        time.sleep_us(50)
 
 if __name__ == "__main__":    
     # Run comparison test for inputed jig_id
