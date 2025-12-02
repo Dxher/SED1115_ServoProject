@@ -158,6 +158,33 @@ def toggle_pen():
             pen_move_start_time = time.ticks_ms()
             print("Pen DOWN")
 
+def read_gcode(filename):
+    """
+    Reads a G-code file and returns a list of commands
+    """
+    commands = []
+    try:
+        with open(filename, "r") as file:
+            for line in file:
+                line = line.strip() # Remove leading/trailing whitespace
+                if not line: # Skip empty lines
+                    continue
+
+                parts = line.split() # Split line into parts
+                cmd = parts[0] # First part is the command
+                params = {} 
+
+                for token in parts[1:]:# Process parameters
+                    key = token[0] # Parameter key (first character)
+                    value = float(token[1:]) # Make value a float
+                    params[key] = value # Store parameter
+
+                commands.append({"cmd": cmd, "params": params}) # Add command to list
+
+        return commands
+    except OSError:
+        print("Error: Could not open file", filename)
+        return []
 
 def main():
     """
@@ -200,3 +227,24 @@ if __name__ == "__main__":
         main()
     except:
         print("\nThe porgram has been forcefully stopped")
+
+"""
+Reword the read_gcode function to make it reaed our calibrated file.
+Keep in mind error handling.
+
+Using the variables, create a plot that would provide us with a new 
+SHOULDER_A = 1
+SHOULDER_B = 146
+ELBOW_A = -1.1
+ELBOW_B = 171.11
+
+think of it as a slope: y=mx + b
+
+Where the SHOULDER_A is m and SHOULDER_B is b
+
+You'll need two slopes: 1 for Shoulder, 1 for Elbow
+
+This is all conceptual, I don't know if this would actually work ;)
+
+
+"""
