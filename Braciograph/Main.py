@@ -12,11 +12,15 @@ Lbc = 155  # elbow to pen
 ShoulderX = -50
 ShoulderY = 139.5
 
-# Constants that calbrate geometric angles to servo angles
-SHOULDER_A = 1
-SHOULDER_B = 146
-ELBOW_A = -1.1
-ELBOW_B = 171.11
+# Default calibration (will be overwritten by file)
+SHOULDER_A = 1.0
+SHOULDER_B = 0.0
+ELBOW_A = 1.0
+ELBOW_B = 0.0
+
+# Drawing area (paper size in mm)
+PAPER_WIDTH = 215
+PAPER_HEIGHT = 279
 
 # Servos
 pwm_shoulder = PWM(Pin(0))
@@ -26,9 +30,9 @@ pwm_elbow.freq(ServoFreq)
 pwm_pen = PWM(Pin(2))
 pwm_pen.freq(ServoFreq)
 
-# Potentiometers for X and Y control
-pot_x = ADC(Pin(26))  # X-axis potentiometer
-pot_y = ADC(Pin(27))  # Y-axis potentiometer
+# Potentiometers
+pot_x = ADC(Pin(26)) #X-axis potentiometer
+pot_y = ADC(Pin(27)) #Y-axis potentiometer
 
 # Button for pen toggle
 pen_button = Pin(22, Pin.IN, Pin.PULL_DOWN)
@@ -37,26 +41,132 @@ pen_button = Pin(22, Pin.IN, Pin.PULL_DOWN)
 pen_is_down = False
 pen_moving = False
 pen_move_start_time = 0
-pen_up_angle = 0      # Angle when pen is lifted
-pen_down_angle = 30    # Angle when pen is on paper
+pen_up_angle = 0    # Angle when pen is lifted
+pen_down_angle = 30 # Angle when pen is on paper
 
+
+
+# SERVO HELPERS
 def translate(angle):
+    MIN = 1638.     #min angle 0 degrees
+    MAX = 8192      #max angle 180 degrees
+    DEG = (MAX - MIN) / 180 # PWM units per degree of servo movement
+    angle = max(0, min(180, angle)) #clamp angle to be between 0 and 180
+    return int(angle * DEG + MIN)   #convert degrees to PWM units
+
+
+def set_servo_deg(pwm, angle_deg): #Give the servo (pwm) an angle (angle_deg) to go to
+    pwm.duty_u16(translate(angle_deg)) # send to servo
+
+
+# CALIBRATION READER + FIT FUNCTIONS
+def read_calibrated_angles(filename="calibrated_angles.txt"):
     """
-    Converts an angle in degrees to the corresponding input
-    for the duty_u16 method of the servo class
+    Reads calibration data from file structured as:
+
+    [SHOULDER]
+    desired,actual,error
+    ...
+    [ELBOW]
+    desired,actual,error
+    ...
     """
-    MIN = 1638  # 0 degrees
-    MAX = 8192  # 180 degrees
-    DEG = (MAX - MIN) / 180  # value per degree
 
-    # clamp angle to be between 0 and 180
-    angle = max(0, min(180, angle))
+    data = {"SHOULDER": [], "ELBOW": []} #
+    current_section = None  #tracks which servo we are reading data for
 
-    return int(angle * DEG + MIN)
+    try:
+        with open(filename, "r") as file: #open file 
+            for line in file:   #read line by line
+                line = line.strip() #remove whitespace
+                if not line:    #skip empty lines
+                    continue
+                if line.startswith("#"): #skip comments
+                    continue
 
-def set_servo_deg(pwm, angle_deg):
-    """Give the servo (pwm) an angle (angle_deg) to go to"""
-    pwm.duty_u16(translate(angle_deg))
+                # Section header
+                if line.startswith("[") and line.endswith("]"): #detect section
+                    name = line[1:-1].strip().upper() #get section name
+                    current_section = name if name in data else None #validate section
+                    continue
+
+                if current_section is None: # Ignore data outside known sections
+
+                    continue
+
+                parts = line.split(",") #split line into parts
+                if len(parts) < 2:
+                    continue
+
+                try:
+                    desired = float(parts[0]) #convert to desired angle
+                    actual = float(parts[1]) #convert to actual angle
+                except ValueError:
+                    continue. #skip invalid lines
+
+                data[current_section].append((desired, actual)) #store pair
+
+        return data
+#error handling
+    except OSError as e:
+        print("Error opening file:", filename, e)
+        return {"SHOULDER": [], "ELBOW": []}
+    except Exception as e:
+        print("Error parsing calibration file:", e)
+        return {"SHOULDER": [], "ELBOW": []}
+
+
+def compute_linear_fit(pairs):
+    """
+    Compute A and B for mapping: actual ≈ A * desired + B
+    """
+    n = len(pairs)
+    if n < 2:
+        raise ValueError("Not enough calibration points") #need at least 2 points
+
+    sum_x = sum_y = sum_xx = sum_xy = 0.0 #initialize formulas
+
+    for x, y in pairs:
+        sum_x  += x #sum of desired angles
+        sum_y  += y #sum of actual angles
+        sum_xx += x * x #sum of desired^2
+        sum_xy += x * y #sum of desired * actual
+
+    denom = n * sum_xx - sum_x * sum_x
+    if denom == 0:
+        raise ValueError("Degenerate calibration data")
+#solve the intersection between A and B
+    A = (n * sum_xy - sum_x * sum_y) / denom
+    B = (sum_y * sum_xx - sum_x * sum_xy) / denom
+
+    return A, B
+
+
+def load_calibration(filename="calibrated_angles.txt"):
+    """
+    Load calibration, compute A/B, update globals.
+    """
+    global SHOULDER_A, SHOULDER_B, ELBOW_A, ELBOW_B
+
+    data = read_calibrated_angles(filename)
+
+    if data["SHOULDER"]:
+        try:
+            SHOULDER_A, SHOULDER_B = compute_linear_fit(data["SHOULDER"])
+            print("Loaded SHOULDER calibration:", SHOULDER_A, SHOULDER_B)
+        except Exception as e:
+            print("Shoulder calibration failed:", e)
+
+    if data["ELBOW"]:
+        try:
+            ELBOW_A, ELBOW_B = compute_linear_fit(data["ELBOW"])
+            print("Loaded ELBOW calibration:", ELBOW_A, ELBOW_B)
+        except Exception as e:
+            print("Elbow calibration failed:", e)
+
+
+
+# INVERSE KINEMATICS
 
 def inverse_kinematics(Cx, Cy):
     """
@@ -103,6 +213,7 @@ def inverse_kinematics(Cx, Cy):
 
     return servoA, servoB
 
+# POSITION + MOVEMENT LOGIC
 def read_potentiometers():
     """
     Read potentiometer values and map to X, Y coordinates
@@ -157,94 +268,28 @@ def toggle_pen():
             pen_moving = True
             pen_move_start_time = time.ticks_ms()
             print("Pen DOWN")
+# MAIN LOOP
+def main():    # Read the initial state of the pen button
+    prev = pen_button.value() 
 
-def read_gcode(filename):
-    """
-    Reads a G-code file and returns a list of commands
-    """
-    commands = []
-    try:
-        with open(filename, "r") as file:
-            for line in file:
-                line = line.strip() # Remove leading/trailing whitespace
-                if not line: # Skip empty lines
-                    continue
-
-                parts = line.split() # Split line into parts
-                cmd = parts[0] # First part is the command
-                params = {} 
-
-                for token in parts[1:]:# Process parameters
-                    key = token[0] # Parameter key (first character)
-                    value = float(token[1:]) # Make value a float
-                    params[key] = value # Store parameter
-
-                commands.append({"cmd": cmd, "params": params}) # Add command to list
-
-        return commands
-    except OSError:
-        print("Error: Could not open file", filename)
-        return []
-
-def main():
-    """
-    Compare drawing results with and without calibration
-    """
-    prev_state = 1
-    while True:
-
-        current_state = pen_button.value()
-        if prev_state == 0 and current_state == 1:
+    while True: #starting a loop
+        now = pen_button.value() #read the state of the button
+ # Detect rising edge: button was NOT pressed before, but IS pressed now
+        if prev == 0 and now == 1: #
             toggle_pen()
-            
-            time.sleep_ms(200)
-        
-        prev_state = current_state
-        
-        x,y = read_potentiometers()
+            time.sleep_ms(200) #delay for debouncing to avoid double trigering
 
-        """
-        This code corrects the position of the pen by setting desired
-        coordinates within bounds, the issue is that when the
-        pen is moving, my overwrite is overwritten. It does, however
-        fix the position when the pen stops. - Ev
-        """
-        if (x>0 or x<215) and (y>0 or y<279):
-            move_to(x, y)
-        if (x>215):
-            x = 215
-        else:
-            x = 0
-        if (y<0):
-            y= 0
-        else:
-            y=279
-            
-        time.sleep_us(50)
+        prev = now
 
-if __name__ == "__main__":  
-    try:  
+        x, y = read_potentiometers() # Read X and Y analog values from potentiometers
+        move_to(x, y) # Move the pen to (x, y)
+
+        time.sleep_ms(10) #to reduce cpu load
+#program 
+
+if __name__ == "__main__": 
+    try:
+        load_calibration("calibrated_angles.txt") #Load calibration offsets for arm accuracy
         main()
-    except:
-        print("\nThe porgram has been forcefully stopped")
-
-"""
-Reword the read_gcode function to make it reaed our calibrated file.
-Keep in mind error handling.
-
-Using the variables, create a plot that would provide us with a new 
-SHOULDER_A = 1
-SHOULDER_B = 146
-ELBOW_A = -1.1
-ELBOW_B = 171.11
-
-think of it as a slope: y=mx + b
-
-Where the SHOULDER_A is m and SHOULDER_B is b
-
-You'll need two slopes: 1 for Shoulder, 1 for Elbow
-
-This is all conceptual, I don't know if this would actually work ;)
-
-
-"""
+    except Exception as e:        # Start the main control loop
+        print("\nProgram stopped:", e)  #error handling
